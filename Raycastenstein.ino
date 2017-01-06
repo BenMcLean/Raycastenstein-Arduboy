@@ -1,45 +1,52 @@
+#include "SPI.h"
+#include "EEPROM.h"
+
 // Created by Ben McLean
 // based on code from http://lodev.org/cgtutor/raycasting.html
 
 #include "Arduboy.h"
 
-Arduboy arduboy;
-
+#define global_seed 42
 #define mapWidth 24
 #define mapHeight 24
 #define w 128
 #define h 64
 
-const char worldMap[mapWidth][mapHeight] =
-{
-  {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 0, 0, 0, 0, 3, 0, 3, 0, 3, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 2, 2, 0, 2, 2, 0, 0, 0, 0, 3, 0, 3, 0, 3, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 4, 4, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 0, 0, 0, 0, 5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 0, 4, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 4, 4, 4, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-  {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
-};
+Arduboy arduboy;
 
-double posX = 22, posY = 12; //x and y start position
-double dirX = -1, dirY = 0; //initial direction vector
+unsigned long hash(int x, int y, int seed) {
+  unsigned char c[10]; // 2 bytes for seed, 4 for x and y (16k seeds, map is 4.2b in each direction before repeats
+  memcpy(c, &seed, 2);
+  memcpy(c + 2, &x, 4);
+  memcpy(c + 6, &y, 4);
+  return APHash(c, 6);
+}
+
+unsigned int APHash(unsigned char* str, unsigned int len)
+{
+  unsigned int hash = 0xAAAAAAAA;
+  unsigned int i    = 0;
+
+  for (i = 0; i < len; str++, i++)
+  {
+    hash ^= ((i & 1) == 0) ? (  (hash <<  7) ^ (*str) * (hash >> 3)) :
+            (~((hash << 11) + ((*str) ^ (hash >> 5))));
+  }
+
+  return hash;
+}
+
+unsigned char worldMap (int x, int y) {
+  if (x == 0 || y == 0) return 1; // collision detection not working for negative numbers yet
+  if (x % 2 == 1 && y % 2 == 1) return 0;
+  if (x % 2 == 0 && y % 2 == 0) return 1;
+  if (hash(x, y, global_seed) % 3 == 1)
+    return 1;
+  return 0;
+}
+
+double posX = 1001.5, posY = 1001.5; //x and y start position
+double dirX = 1, dirY = 0; //initial direction vector
 double planeX = 0, planeY = 0.66; //the 2d raycaster version of camera plane
 double currentTime = 0; //time of current frame
 double oldTime = 0; //time of previous frame
@@ -116,7 +123,7 @@ void loop() {
         side = 1;
       }
       //Check if ray has hit a wall
-      if (worldMap[mapX][mapY] > 0) hit = 1;
+      if (worldMap(mapX, mapY) > 0) hit = 1;
     }
     //Calculate distance projected on camera direction (oblique distance will give fisheye effect!)
     if (side == 0) perpWallDist = (mapX - rayPosX + (1 - stepX) / 2) / rayDirX;
@@ -146,17 +153,16 @@ void loop() {
   //move forward if no wall in front of you
   if (arduboy.pressed(UP_BUTTON))
   {
-    if (worldMap[int(posX + dirX * moveSpeed)][int(posY)] == false) posX += dirX * moveSpeed;
-    if (worldMap[int(posX)][int(posY + dirY * moveSpeed)] == false) posY += dirY * moveSpeed;
+    if (worldMap(int(posX + dirX * moveSpeed), int(posY)) == false) posX += dirX * moveSpeed;
+    if (worldMap(int(posX), int(posY + dirY * moveSpeed)) == false) posY += dirY * moveSpeed;
   }
   //move backwards if no wall behind you
   if (arduboy.pressed(DOWN_BUTTON))
   {
-    if (worldMap[int(posX - dirX * moveSpeed)][int(posY)] == false) posX -= dirX * moveSpeed;
-    if (worldMap[int(posX)][int(posY - dirY * moveSpeed)] == false) posY -= dirY * moveSpeed;
+    if (worldMap(int(posX - dirX * moveSpeed), int(posY)) == false) posX -= dirX * moveSpeed;
+    if (worldMap(int(posX), int(posY - dirY * moveSpeed)) == false) posY -= dirY * moveSpeed;
   }
-  //rotate to the right
-  if (arduboy.pressed(RIGHT_BUTTON))
+  if (arduboy.pressed(LEFT_BUTTON))
   {
     //both camera direction and camera plane must be rotated
     double oldDirX = dirX;
@@ -166,8 +172,7 @@ void loop() {
     planeX = planeX * cos(-rotSpeed) - planeY * sin(-rotSpeed);
     planeY = oldPlaneX * sin(-rotSpeed) + planeY * cos(-rotSpeed);
   }
-  //rotate to the left
-  if (arduboy.pressed(LEFT_BUTTON))
+  if (arduboy.pressed(RIGHT_BUTTON))
   {
     //both camera direction and camera plane must be rotated
     double oldDirX = dirX;
@@ -177,6 +182,9 @@ void loop() {
     planeX = planeX * cos(rotSpeed) - planeY * sin(rotSpeed);
     planeY = oldPlaneX * sin(rotSpeed) + planeY * cos(rotSpeed);
   }
+
+  //arduboy.setCursor(0, 0);
+  //arduboy.print(String(posX) + F(", ") + String(posY));
 
   arduboy.display();
 }
